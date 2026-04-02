@@ -1,10 +1,11 @@
 package Finance.DashBoard.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
-import lombok.*;
-import java.time.LocalDate;
-
 import jakarta.validation.constraints.*;
+import lombok.*;
+
+import java.time.LocalDate;
 
 @Entity
 @Data
@@ -32,5 +33,7 @@ public class FinancialRecord {
     private String note;
 
     @ManyToOne
+    @JoinColumn(name = "user_id")
+    @JsonIgnoreProperties({"password"})
     private User createdBy;
 }

@@ -1,6 +1,10 @@
 package Finance.DashBoard.service;
+
+import Finance.DashBoard.dto.FinancialRecordRequest;
 import Finance.DashBoard.model.FinancialRecord;
+import Finance.DashBoard.model.User;
 import Finance.DashBoard.repository.FinancialRecordRepository;
+import Finance.DashBoard.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -12,35 +16,38 @@ public class FinancialRecordService {
     @Autowired
     private FinancialRecordRepository repo;
 
-    // CREATE
-    public FinancialRecord createRecord(FinancialRecord record) {
-        if (record.getAmount() <= 0) {
+    @Autowired
+    private UserRepository userRepository;
+
+    public FinancialRecord createRecord(FinancialRecordRequest request) {
+        if (request.getAmount() <= 0) {
             throw new RuntimeException("Amount must be greater than 0");
         }
+
+        User user = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        FinancialRecord record = new FinancialRecord();
+        record.setAmount(request.getAmount());
+        record.setType(request.getType());
+        record.setCategory(request.getCategory());
+        record.setDate(request.getDate());
+        record.setNote(request.getNote());
+        record.setCreatedBy(user);
+
         return repo.save(record);
     }
 
-    // READ
     public List<FinancialRecord> getAllRecords() {
         return repo.findAll();
     }
 
-    // UPDATE
-    public FinancialRecord updateRecord(Long id, FinancialRecord newRecord) {
-        FinancialRecord record = repo.findById(id)
+    public FinancialRecord getRecordById(Long id) {
+        return repo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Record not found"));
-
-        record.setAmount(newRecord.getAmount());
-        record.setCategory(newRecord.getCategory());
-        record.setType(newRecord.getType());
-        record.setDate(newRecord.getDate());
-        record.setNote(newRecord.getNote());
-
-        return repo.save(record);
     }
 
-    // DELETE
-    public void deleteRecord(Long id) {
-        repo.deleteById(id);
+    public List<FinancialRecord> getRecordsByUser(Long userId) {
+        return repo.findByCreatedById(userId);
     }
 }
