@@ -20,7 +20,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Autowired
     private JwtUtil jwtUtil;
-
+//    h2
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
