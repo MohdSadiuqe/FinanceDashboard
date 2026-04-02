@@ -40,7 +40,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
             String username = claims.getSubject();
             String role = claims.get("role", String.class);
-            
+
             List<SimpleGrantedAuthority> authorities =
                     List.of(new SimpleGrantedAuthority("ROLE_" + role));
 
@@ -49,7 +49,6 @@ public class JwtFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.getContext().setAuthentication(auth);
         }
-
         filterChain.doFilter(request, response);
     }
 }
