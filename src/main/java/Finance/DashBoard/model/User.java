@@ -27,6 +27,7 @@ public class User {
     private String email;
 
     @NotBlank
+    @JsonIgnore
     private String password;
 
     @Enumerated(EnumType.STRING)

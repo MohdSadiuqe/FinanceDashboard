@@ -1,156 +1,160 @@
-Finance Data Processing and Access Control Backend
+# Finance Dashboard Backend
 
-## Overview
+Spring Boot backend for a finance dashboard: **financial records**, **role-based access control (RBAC)**, **JWT authentication**, **aggregated dashboard APIs**, and **H2 persistence** (in-memory for local development).
 
-This project is a backend system for a Finance Dashboard that manages financial records, user roles, and summary analytics.
-
-It demonstrates:
-
-* REST API design
-* Role-Based Access Control (RBAC)
-* JWT Authentication
-* Data modeling with JPA
-* Validation and error handling
+This project is structured to match a typical take-home brief: clear layers (controller → service → repository), explicit validation and errors, and documented assumptions.
 
 ---
 
-## Tech Stack
+## How this maps to the assignment
 
-* Java
-* Spring Boot
-* Spring Security (JWT)
-* Spring Data JPA
-* Maven
-* H2 / MySQL
-
----
-
-## Project Structure
-
-com.finance.dashboard
-├── controller
-├── service
-├── repository
-├── model
-├── security
-└── jwt
+| Requirement | Implementation |
+|-------------|----------------|
+| **User & role management** | `User` entity with `Role` (`VIEWER`, `ANALYST`, `ADMIN`), `isActive`, CRUD-style admin APIs under `/users` |
+| **Financial records** | JPA entity with amount, type (`INCOME` / `EXPENSE`), category, date, note; CRUD + query filters + pagination |
+| **Dashboard summaries** | `/dashboard/summary`, `/dashboard/recent`, `/dashboard/trends` (monthly or weekly buckets) |
+| **Access control** | Spring Security **JWT** filter + `@PreAuthorize` on controllers (method security) |
+| **Validation & errors** | Jakarta Validation on DTOs; `GlobalExceptionHandler` returns JSON `ApiError` with appropriate HTTP status codes |
+| **Persistence** | H2 in-memory via JPA (`application.properties`) |
 
 ---
 
-## Authentication (JWT)
+## Tech stack
 
-### 🔹 Login API
+- Java 21+ (project parent targets Java 21; CI/local may use newer JDKs)
+- Spring Boot 4, Spring Security, Spring Data JPA
+- H2, Lombok, JJWT
 
-POST /auth/login
+---
 
-Request:
+## Run locally
+
+```bash
+mvn spring-boot:run
+```
+
+- API base URL: `http://localhost:8080`
+- H2 console: `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:financedb`, user `sa`, empty password)
+
+---
+
+## Demo users (seeded on first startup)
+
+| Email | Password | Role |
+|-------|----------|------|
+| `admin@demo.local` | `Admin123!` | `ADMIN` |
+| `analyst@demo.local` | `Analyst123!` | `ANALYST` |
+| `viewer@demo.local` | `Viewer123!` | `VIEWER` |
+
+A small set of **sample financial records** is inserted when the database is empty.
+
+---
+
+## Authentication
+
+### `POST /auth/login`
+
+Request body:
+
+```json
 {
-"username": "admin"
+  "email": "admin@demo.local",
+  "password": "Admin123!"
 }
+```
 
 Response:
+
+```json
 {
-"token": "<JWT_TOKEN>"
+  "token": "<JWT>",
+  "email": "admin@demo.local",
+  "role": "ADMIN",
+  "expiresInSeconds": 3600
 }
+```
+
+Send the token on protected routes:
+
+```http
+Authorization: Bearer <JWT>
+```
+
+JWT claims include the user **email** as the subject and **role** (e.g. `ADMIN`) for Spring Security authorities (`ROLE_ADMIN`).
 
 ---
 
-## How to Use Token
+## Roles and enforced behavior
 
-Add token in request header:
+| Role | Allowed |
+|------|---------|
+| **VIEWER** | Read dashboard endpoints only (`/dashboard/**`) |
+| **ANALYST** | Dashboard + **read** financial records (`GET /records`, `GET /records/{id}`) |
+| **ADMIN** | Everything above + **create/update/delete** records + **user management** (`/users/**`) |
 
-Authorization: Bearer <JWT_TOKEN>
-
----
-
-## Roles
-
-* ADMIN → Full access
-* ANALYST → Read access
-* VIEWER → Limited access
+Inactive users (`isActive = false`) cannot log in.
 
 ---
 
-## API Endpoints
+## API reference
 
-### Financial Records
+### Users (ADMIN only)
 
-POST   /records       (ADMIN)
-GET    /records       (ADMIN, ANALYST)
-PUT    /records/{id}  (ADMIN)
-DELETE /records/{id}  (ADMIN)
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/users` | Create user (body: `UserRequest`) |
+| `GET` | `/users` | List users (passwords never returned) |
+| `GET` | `/users/{id}` | Get user |
+| `PATCH` | `/users/{id}` | Partial update: `name`, `role`, `isActive`, `password` (`UserPatchRequest`) |
 
----
+### Financial records
 
-### Dashboard
+| Method | Path | Roles | Description |
+|--------|------|-------|-------------|
+| `POST` | `/records` | ADMIN | Create (`FinancialRecordRequest`, includes `userId` of owning user) |
+| `GET` | `/records` | ANALYST, ADMIN | Paginated list; optional filters: `type`, `category`, `dateFrom`, `dateTo`, `createdByUserId` |
+| `GET` | `/records/{id}` | ANALYST, ADMIN | Get one |
+| `PUT` | `/records/{id}` | ADMIN | Update (`FinancialRecordUpdateRequest`) |
+| `DELETE` | `/records/{id}` | ADMIN | Delete (**hard delete**; keeps the model simple on Hibernate 7) |
 
-GET /dashboard/summary (All users)
+Pagination: standard Spring Data query params, e.g. `?page=0&size=20&sort=date,desc`.
 
----
+### Dashboard (VIEWER, ANALYST, ADMIN)
 
-## Sample Request
-
-POST /records
-
-{
-"amount": 5000,
-"type": "INCOME",
-"category": "Salary",
-"date": "2026-04-01",
-"note": "Monthly salary"
-}
-
----
-
-## Validation Rules
-
-* Amount > 0
-* Category not empty
-* Type required
-* Date required
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/dashboard/summary` | Total income, total expense, net balance, category totals split by income vs expense |
+| `GET` | `/dashboard/recent?limit=10` | Recent activity (default 10, max 50) with creator metadata |
+| `GET` | `/dashboard/trends?granularity=MONTH` | Time-series buckets; `granularity` = `MONTH` (default) or `WEEK` (ISO week, e.g. `2026-W14`) |
 
 ---
 
-## Error Codes
+## Configuration
 
-* 400 → Bad Request
-* 401 → Unauthorized
-* 403 → Forbidden
-
----
-
-## Run Project
-
-1. Clone repo
-2. Run:
-   mvn spring-boot:run
-3. Open:
-   [http://localhost:8080](http://localhost:8080)
+| Property | Purpose |
+|----------|---------|
+| `jwt.secret` | HS256 signing secret (use a long random value in production) |
+| `jwt.expiration-ms` | Token lifetime in milliseconds |
 
 ---
 
-## Testing
+## Assumptions and tradeoffs
 
-1. Login → get token
-2. Use token in Bearer Auth
-3. Call APIs
-
----
-
-## Assumptions
-
-* Simplified login (no DB auth)
-* Roles hardcoded
-* JWT used instead of sessions
+- **JWT stateless auth**: No refresh-token flow; suitable for a demo or SPA with short-lived tokens.
+- **Email as identity**: Login and JWT subject use **email** (normalized to lowercase when stored).
+- **Record ownership**: `createdBy` links a record to a user; admins choose `userId` on create.
+- **Dashboard scope**: Aggregates are **global** (all records), not per-user slices—reasonable for a small org dashboard; you could add `WHERE created_by = :currentUser` for multi-tenant style if needed.
+- **H2 in-memory**: Data is reset when the process stops unless you switch the JDBC URL to a file-based H2 or another database.
 
 ---
 
-## Future Improvements
+## Tests
 
-* Connect users with database
-* Add refresh tokens
-* Add Swagger documentation
-* Add pagination
+```bash
+mvn verify
+```
+
+`spring-boot-starter-test` runs a **context load** test to ensure the application wiring starts.
 
 ---
 

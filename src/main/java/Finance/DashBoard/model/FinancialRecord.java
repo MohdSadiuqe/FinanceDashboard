@@ -8,6 +8,7 @@ import lombok.*;
 import java.time.LocalDate;
 
 @Entity
+@Table(name = "financial_records")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -32,7 +33,7 @@ public class FinancialRecord {
 
     private String note;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     @JsonIgnoreProperties({"password"})
     private User createdBy;
