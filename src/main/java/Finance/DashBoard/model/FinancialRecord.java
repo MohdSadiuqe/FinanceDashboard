@@ -29,6 +29,7 @@ public class FinancialRecord {
     private String category;
 
     @NotNull
+    @Column(name = "record_date", nullable = false)
     private LocalDate date;
 
     private String note;

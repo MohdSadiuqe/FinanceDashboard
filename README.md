@@ -1,6 +1,6 @@
 # Finance Dashboard Backend
 
-Spring Boot backend for a finance dashboard: **financial records**, **role-based access control (RBAC)**, **JWT authentication**, **aggregated dashboard APIs**, and **H2 persistence** (in-memory for local development).
+Spring Boot backend for a finance dashboard: **financial records**, **role-based access control (RBAC)**, **JWT authentication**, **aggregated dashboard APIs**, and **MySQL** persistence. **H2** is used only for automated tests so `mvn verify` does not need a running MySQL instance.
 
 This project is structured to match a typical take-home brief: clear layers (controller → service → repository), explicit validation and errors, and documented assumptions.
 
@@ -15,7 +15,7 @@ This project is structured to match a typical take-home brief: clear layers (con
 | **Dashboard summaries** | `/dashboard/summary`, `/dashboard/recent`, `/dashboard/trends` (monthly or weekly buckets) |
 | **Access control** | Spring Security **JWT** filter + `@PreAuthorize` on controllers (method security) |
 | **Validation & errors** | Jakarta Validation on DTOs; `GlobalExceptionHandler` returns JSON `ApiError` with appropriate HTTP status codes |
-| **Persistence** | H2 in-memory via JPA (`application.properties`) |
+| **Persistence** | **MySQL** via JPA (`application.properties`); **H2** in tests only |
 
 ---
 
@@ -23,7 +23,40 @@ This project is structured to match a typical take-home brief: clear layers (con
 
 - Java 21+ (project parent targets Java 21; CI/local may use newer JDKs)
 - Spring Boot 4, Spring Security, Spring Data JPA
-- H2, Lombok, JJWT
+- MySQL (runtime), H2 (tests only), Lombok, JJWT
+
+---
+
+## Database (SQL DDL)
+
+- **[`database/schema.sql`](database/schema.sql)** — portable DDL (`record_date` column maps to `FinancialRecord.date`).
+- **[`database/schema-mysql.sql`](database/schema-mysql.sql)** — **MySQL 8+** variant with `AUTO_INCREMENT` and `utf8mb4` (optional if you create tables manually).
+
+JPA **`spring.jpa.hibernate.ddl-auto=update`** creates or updates tables against MySQL when the app starts. Demo users and sample rows are inserted by **`DataInitializer`** (BCrypt passwords), not by these scripts.
+
+---
+
+## MySQL setup
+
+1. Install and start **MySQL 8+**.
+2. Create a database user and grant access (example matches default `application.properties`):
+
+```sql
+CREATE DATABASE IF NOT EXISTS financedb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'finance'@'localhost' IDENTIFIED BY 'finance';
+GRANT ALL PRIVILEGES ON financedb.* TO 'finance'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+3. Default connection settings live in **`src/main/resources/application.properties`**:
+
+| Property | Default |
+|----------|---------|
+| `spring.datasource.url` | `jdbc:mysql://localhost:3306/financedb?createDatabaseIfNotExist=true&...` |
+| `spring.datasource.username` | `finance` |
+| `spring.datasource.password` | `finance` |
+
+Override locally by editing that file or using environment variables such as `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD`.
 
 ---
 
@@ -34,7 +67,7 @@ mvn spring-boot:run
 ```
 
 - API base URL: `http://localhost:8080`
-- H2 console: `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:mem:financedb`, user `sa`, empty password)
+- Ensure **MySQL** is running and credentials match `application.properties` before starting the app.
 
 ---
 
@@ -144,7 +177,8 @@ Pagination: standard Spring Data query params, e.g. `?page=0&size=20&sort=date,d
 - **Email as identity**: Login and JWT subject use **email** (normalized to lowercase when stored).
 - **Record ownership**: `createdBy` links a record to a user; admins choose `userId` on create.
 - **Dashboard scope**: Aggregates are **global** (all records), not per-user slices—reasonable for a small org dashboard; you could add `WHERE created_by = :currentUser` for multi-tenant style if needed.
-- **H2 in-memory**: Data is reset when the process stops unless you switch the JDBC URL to a file-based H2 or another database.
+- **MySQL**: Application data persists in your MySQL instance; use migrations or `ddl-auto=validate`/`none` in production instead of `update`.
+- **Tests**: `src/test/resources/application.properties` uses **H2 in-memory** so tests do not require MySQL.
 
 ---
 
@@ -154,7 +188,7 @@ Pagination: standard Spring Data query params, e.g. `?page=0&size=20&sort=date,d
 mvn verify
 ```
 
-`spring-boot-starter-test` runs a **context load** test to ensure the application wiring starts.
+`spring-boot-starter-test` runs a **context load** test against **H2** (`src/test/resources/application.properties`) so the suite does not depend on MySQL.
 
 ---
 
